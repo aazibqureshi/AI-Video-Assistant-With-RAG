@@ -44,6 +44,7 @@ outputs/
 *.pdf
 *.txt
 !requirements.txt
+vector_db/
 
 # ── Streamlit ────────────────────────────────────────────────────────────────────
 .streamlit/secrets.toml
