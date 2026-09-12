@@ -1,58 +1,106 @@
+import os
 import yt_dlp
 from pydub import AudioSegment
-import os
 
-DOWNLOAD_DIR = "downloades"
+
+DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
 def download_youtube_audio(url: str) -> str:
-    output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
+    """
+    Download YouTube audio and convert it to WAV.
+    """
+
+    output_path = os.path.join(
+        DOWNLOAD_DIR,
+        "%(title)s.%(ext)s"
+    )
+
     ydl_opts = {
         "format": "bestaudio/best",
+
         "outtmpl": output_path,
+
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "wav",
-                "preferredquality": "192",
             }
         ],
-        "quiet": True,
+
+        # Don't hide the actual yt-dlp error
+        "quiet": False,
+        "no_warnings": False,
+
+        # Better compatibility with YouTube
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"],
+                "player_client": ["web"]
             }
         },
+
+        "noplaylist": True,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-        base, _ = os.path.splitext(filename)  # extension chahe kuch bhi ho
-        filename = base + ".wav"  # FFmpegExtractAudio hamesha .wav banata hai
-    return filename
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+
+            filename = ydl.prepare_filename(info)
+
+            # FFmpegExtractAudio changes extension to .wav
+            base, _ = os.path.splitext(filename)
+            wav_path = base + ".wav"
+
+            if not os.path.exists(wav_path):
+                raise FileNotFoundError(
+                    f"WAV file was not created: {wav_path}"
+                )
+
+            return wav_path
+
+    except yt_dlp.utils.DownloadError as e:
+        raise RuntimeError(
+            f"YouTube audio download failed: {str(e)}"
+        ) from e
 
 
 def convert_to_wav(input_path: str) -> str:
-    """Convert any audio/video file to WAV format using pydub."""
+    """Convert any audio/video file to WAV format."""
+
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
+
     audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1).set_frame_rate(16000)  # 16khz
+
+    audio = (
+        audio
+        .set_channels(1)
+        .set_frame_rate(16000)
+    )
+
     audio.export(output_path, format="wav")
+
     return output_path
 
 
 def chunk_audio(wav_path: str, chunk_seconds: int = 25) -> list:
-    """Split wav into <=25s chunks — keeps well under Groq's 25MB file-size
-    limit and Sarvam's 30s duration limit."""
+    """
+    Split WAV into <=25 second chunks.
+    """
+
     audio = AudioSegment.from_wav(wav_path)
+
     chunk_ms = chunk_seconds * 1000
 
     chunks = []
 
     for i, start in enumerate(range(0, len(audio), chunk_ms)):
-        chunk = audio[start : start + chunk_ms]
+
+        chunk = audio[start:start + chunk_ms]
+
         chunk_path = f"{wav_path}_chunk_{i}.wav"
+
         chunk.export(chunk_path, format="wav")
 
         chunks.append(chunk_path)
@@ -61,14 +109,23 @@ def chunk_audio(wav_path: str, chunk_seconds: int = 25) -> list:
 
 
 def process_input(source: str) -> list:
-    if source.startswith("http://") or source.startswith("https://"):
+
+    if source.startswith(("http://", "https://")):
+
         print("Detected YouTube URL. Downloading audio...")
+
         wav_path = download_youtube_audio(source)
+
     else:
+
         print("Detected local file. Converting to WAV...")
+
         wav_path = convert_to_wav(source)
 
     print("Chunking audio...")
+
     chunks = chunk_audio(wav_path)
+
     print(f"Audio ready — {len(chunks)} chunk(s) created.")
+
     return chunks
