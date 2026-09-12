@@ -1,0 +1,61 @@
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── uv ─────────────────────────────────────────────────────────────────────────
+# uv.lock ko commit karna generally recommend kiya jaata hai (reproducible builds ke liye)
+# agar aap ise track nahi karna chahte, niche wali line uncomment kar dijiye:
+# uv.lock
+
+# ── Downloaded / generated audio files ─────────────────────────────────────────
+downloades/
+*.wav
+*.mp3
+*.m4a
+*_chunk_*.wav
+*_converted.wav
+
+# ── Vector store / RAG data ─────────────────────────────────────────────────────
+chroma_db/
+*.sqlite3
+*.parquet
+
+# ── HuggingFace / model caches ───────────────────────────────────────────────────
+.cache/
+huggingface_cache/
+
+# ── Exported outputs ────────────────────────────────────────────────────────────
+outputs/
+*.pdf
+*.txt
+!requirements.txt
+
+# ── Streamlit ────────────────────────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ── OS files ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────────────────────────────
+*.log
