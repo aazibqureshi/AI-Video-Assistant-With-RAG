@@ -9,25 +9,27 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 def download_youtube_audio(url: str) -> str:
     """
-    Download YouTube video/audio and convert it to WAV.
+    Download audio from a YouTube URL and convert it to WAV.
 
-    Uses multiple YouTube player clients so that yt-dlp has
-    a better chance of finding an audio-capable format.
+    Important:
+    - Do NOT force a specific YouTube player client.
+    - Let the current yt-dlp version choose the appropriate client.
+    - FFmpeg is required for audio extraction.
     """
 
     output_path = os.path.join(
         DOWNLOAD_DIR,
-        "%(title)s.%(ext)s"
+        "%(id)s.%(ext)s"
     )
 
     ydl_opts = {
-        # Prefer any format containing audio.
-        # If separate video/audio streams are available,
-        # yt-dlp can merge them using FFmpeg.
-        "format": "bv*+ba/b",
+        # Prefer audio-only.
+        # Fall back to the best available combined format.
+        "format": "ba/b",
 
         "outtmpl": output_path,
 
+        # Convert downloaded audio to WAV
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -35,38 +37,31 @@ def download_youtube_audio(url: str) -> str:
             }
         ],
 
-        # Download only one video
         "noplaylist": True,
 
-        # Show useful errors in Streamlit logs
+        # Keep logs visible on Streamlit Cloud
         "quiet": False,
         "no_warnings": False,
 
-        # Try more than only the web player client.
-        # YouTube currently exposes different formats
-        # through different clients.
-        "extractor_args": {
-            "youtube": {
-                "player_client": [
-                    "web_embedded",
-                    "web",
-                    "android_vr",
-                ]
-            }
-        },
+        # Network retries
+        "retries": 5,
+        "fragment_retries": 5,
 
-        # Retry temporary network failures
-        "retries": 3,
-        "fragment_retries": 3,
+        # Don't force web/android clients.
+        # yt-dlp's current default client selection
+        # is safer because YouTube changes its clients.
+        #
+        # IMPORTANT:
+        # No "extractor_args" here.
 
-        # Don't keep unnecessary files
         "keepvideo": False,
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
-            print("Extracting YouTube information...")
+        print("Starting YouTube extraction...")
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 
             info = ydl.extract_info(
                 url,
@@ -75,17 +70,22 @@ def download_youtube_audio(url: str) -> str:
 
             filename = ydl.prepare_filename(info)
 
-            # FFmpegExtractAudio converts the downloaded
-            # file extension to .wav
+            # FFmpegExtractAudio changes extension
+            # to .wav.
             base, _ = os.path.splitext(filename)
+
             wav_path = base + ".wav"
 
             if not os.path.exists(wav_path):
                 raise FileNotFoundError(
-                    f"WAV file was not created: {wav_path}"
+                    f"FFmpeg did not create WAV file: "
+                    f"{wav_path}"
                 )
 
-            print(f"YouTube audio downloaded: {wav_path}")
+            print(
+                f"YouTube audio successfully "
+                f"downloaded: {wav_path}"
+            )
 
             return wav_path
 
@@ -93,22 +93,36 @@ def download_youtube_audio(url: str) -> str:
 
         error_message = str(e)
 
+        print(
+            "yt-dlp DownloadError:"
+        )
+        print(error_message)
+
         raise RuntimeError(
             "YouTube audio download failed.\n\n"
             f"{error_message}\n\n"
-            "Possible causes:\n"
-            "1. YouTube did not expose an audio format.\n"
-            "2. The video requires authentication.\n"
-            "3. YouTube temporarily blocked the request.\n"
-            "4. FFmpeg is not installed on the server."
+            "Please check the Streamlit logs for "
+            "the complete yt-dlp error."
+        ) from e
+
+    except Exception as e:
+
+        print(
+            "Unexpected YouTube download error:"
+        )
+        print(repr(e))
+
+        raise RuntimeError(
+            "Unexpected error while downloading "
+            f"YouTube audio: {str(e)}"
         ) from e
 
 
 def convert_to_wav(input_path: str) -> str:
     """
-    Convert any audio/video file to WAV format.
+    Convert any local audio/video file to WAV.
 
-    The output is:
+    Output:
     - mono
     - 16 kHz
     """
@@ -118,7 +132,9 @@ def convert_to_wav(input_path: str) -> str:
         + "_converted.wav"
     )
 
-    audio = AudioSegment.from_file(input_path)
+    audio = AudioSegment.from_file(
+        input_path
+    )
 
     audio = (
         audio
@@ -142,7 +158,9 @@ def chunk_audio(
     Split WAV into chunks of <= 25 seconds.
     """
 
-    audio = AudioSegment.from_wav(wav_path)
+    audio = AudioSegment.from_wav(
+        wav_path
+    )
 
     chunk_ms = chunk_seconds * 1000
 
@@ -177,7 +195,8 @@ def process_input(source: str) -> list:
     1. YouTube URL
     2. Local audio/video file
 
-    Returns a list of WAV chunks.
+    Returns:
+        List of WAV chunk paths.
     """
 
     if source.startswith(
@@ -206,7 +225,9 @@ def process_input(source: str) -> list:
 
     print("Chunking audio...")
 
-    chunks = chunk_audio(wav_path)
+    chunks = chunk_audio(
+        wav_path
+    )
 
     print(
         f"Audio ready — "
